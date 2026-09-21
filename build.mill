@@ -33,6 +33,9 @@ trait WedgiePublish extends PublishModule {
 
 trait WedgieJSModule extends WedgieModule, ScalaJSModule {
   def scalaJSVersion = Versions.scalaJS
+  // Closure does not run for ESModule output, so fullLinkJS alone leaves the
+  // bundle unminified. This is Scala.js's own minifier, which does.
+  def scalaJSMinify = true
 }
 
 /** Pure wire logic: constants, state merge/diff, `_esm` delivery strategies.
@@ -70,10 +73,42 @@ object kernel extends WedgieModule, WedgiePublish {
   }
 }
 
-/** Scala.js frontend. ESModule because the anywidget AFM contract requires one. */
+/** The shared state type, plus the Laminar app that renders it.
+  *
+  * `example/src` is compiled for both platforms: `example.jvm` is what the kernel
+  * imports, `example.js` is what the browser runs. One source, two ends, and the
+  * compiler holds them together — which is the argument for doing this in Scala
+  * at all.
+  */
+object example extends Module {
+  trait Shared extends WedgieModule, PlatformScalaModule {
+    def mvnDeps = Seq(mvn"com.lihaoyi::upickle::${Versions.upickle}")
+  }
+  object jvm extends Shared, WedgiePublish {
+    def artifactName = "wedgie-example"
+    // Pulls the kernel library in transitively, so a notebook needs one import.
+    def moduleDeps = Seq(kernel)
+  }
+  object js extends Shared, WedgieJSModule {
+    def moduleDeps       = Seq(front) // and Laminar + core.js transitively
+    def moduleKind       = ModuleKind.ESModule
+    def moduleSplitStyle = ModuleSplitStyle.FewestModules
+  }
+}
+
+/** Scala.js library: the Laminar/traitlet bridge. Not linked on its own — it has
+  * no entry point, so that anything depending on it may define the one `default`
+  * export an AFM is allowed. */
 object front extends WedgieJSModule {
-  def moduleDeps       = Seq(core.js)
-  def mvnDeps          = Seq(mvn"com.raquo::laminar::${Versions.laminar}")
+  def moduleDeps = Seq(core.js)
+  def mvnDeps    = Seq(mvn"com.raquo::laminar::${Versions.laminar}")
+}
+
+/** A model-free Laminar mount, kept as a bisection tool: it separates "Laminar
+  * runs in the webview" from "sync works", which fail for entirely different
+  * reasons. */
+object smoke extends WedgieJSModule {
+  def moduleDeps       = Seq(front)
   def moduleKind       = ModuleKind.ESModule
   def moduleSplitStyle = ModuleSplitStyle.FewestModules
 }

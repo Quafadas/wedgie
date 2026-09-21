@@ -1,4 +1,4 @@
-package wedgie.front
+package wedgie.smoke
 
 import com.raquo.laminar.api.L
 import com.raquo.laminar.api.L.*

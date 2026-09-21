@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The AFM contract check runs the linked bundles under node, so no browser
+      # is needed to catch a module that a notebook would report only as
+      # "nothing rendered".
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: coursier/cache-action@v6
+
+      - name: Cache mill
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mill
+          key: mill-${{ hashFiles('.mill-version') }}
+
+      - name: Compile
+        run: ./mill __.compile
+
+      - name: Test
+        run: ./mill __.test
+
+      # Linked separately so a failure names the module that broke. Each is an
+      # ESModule with exactly one `default` export; two modules on one classpath
+      # both claiming it is a link error, which is how the smoke test came to
+      # live in its own module.
+      - name: Link smoke bundle
+        run: ./mill smoke.fullLinkJS
+
+      - name: Link example bundle
+        run: ./mill example.js.fullLinkJS
+
+      - name: Check anywidget module contract
+        run: |
+          node scripts/afm-check.mjs \
+            out/smoke/fullLinkJS.dest/main.js \
+            out/example/js/fullLinkJS.dest/main.js
+
+      - name: Check notebooks
+        run: python3 scripts/check-notebooks.py
+
+      - name: Verify the library publishes
+        run: |
+          ./mill core.jvm.publishLocal
+          ./mill kernel.publishLocal
+          ./mill example.jvm.publishLocal
+
+      # Reported rather than enforced: `_esm` is synced model state, so bundle
+      # size is the cost of EsmSource.Inline. A hard threshold would be noise,
+      # but a silent 3x regression would not be noticed otherwise.
+      - name: Report bundle sizes
+        if: always()
+        run: |
+          {
+            echo "### Bundle sizes"
+            echo
+            echo "| bundle | raw | gzip |"
+            echo "| --- | ---: | ---: |"
+            for f in out/smoke/fullLinkJS.dest/main.js out/example/js/fullLinkJS.dest/main.js; do
+              [ -f "$f" ] || continue
+              raw=$(stat -c%s "$f")
+              gz=$(gzip -c "$f" | wc -c)
+              printf "| \`%s\` | %d KB | %d KB |\n" "$f" $((raw/1024)) $((gz/1024))
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
