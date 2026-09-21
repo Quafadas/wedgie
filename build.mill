@@ -1,0 +1,79 @@
+package build
+
+import mill.*, scalalib.*, scalajslib.*, scalajslib.api.*
+import mill.scalalib.publish.*
+
+object Versions {
+  val scala     = "3.8.4"
+  val scalaJS   = "1.22.0" // Scala 3.8.4 emits linkTimeIf; needs >= 1.20
+  val upickle   = "4.3.0"
+  val laminar   = "17.2.1"
+  val munit     = "1.2.0"
+  val almondApi = "0.14.1"
+}
+
+trait WedgieModule extends ScalaModule {
+  def scalaVersion  = Versions.scala
+  def scalacOptions = Seq("-deprecation", "-feature")
+}
+
+/** Published so the kernel library can be pulled into a cell with `import $ivy`.
+  * `./mill kernel.publishLocal` puts it where Almond will find it. */
+trait WedgiePublish extends PublishModule {
+  def publishVersion = "0.1.0-SNAPSHOT"
+  def pomSettings = PomSettings(
+    description = "Jupyter widgets for the Almond Scala kernel, via anywidget",
+    organization = "io.github.quafadas",
+    url = "https://github.com/Quafadas/wedgie",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("Quafadas", "wedgie"),
+    developers = Seq(Developer("Quafadas", "Simon Parten", "https://github.com/Quafadas"))
+  )
+}
+
+trait WedgieJSModule extends WedgieModule, ScalaJSModule {
+  def scalaJSVersion = Versions.scalaJS
+}
+
+/** Pure wire logic: constants, state merge/diff, `_esm` delivery strategies.
+  *
+  * Deliberately has no Almond dependency, so all of the logic that is actually
+  * easy to get wrong is unit-testable on the JVM with no kernel in the loop.
+  */
+object core extends Module {
+  trait Shared extends WedgieModule, PlatformScalaModule {
+    def mvnDeps = Seq(mvn"com.lihaoyi::upickle::${Versions.upickle}")
+  }
+  object jvm extends Shared, WedgiePublish {
+    def artifactName = "wedgie-core"
+    object test extends ScalaTests, TestModule.Munit {
+      def mvnDeps = Seq(mvn"org.scalameta::munit::${Versions.munit}")
+    }
+  }
+  object js extends Shared, WedgieJSModule
+}
+
+/** The Almond-facing layer. Thin by design — everything worth testing is in core. */
+object kernel extends WedgieModule, WedgiePublish {
+  def artifactName = "wedgie-kernel"
+  def moduleDeps   = Seq(core.jvm)
+  // Almond already has interpreter-api on the kernel classpath. Publishing it as a
+  // normal dependency would let `import $ivy` drag in a second, possibly mismatched
+  // copy alongside the running kernel's own.
+  def compileMvnDeps = Seq(mvn"sh.almond::interpreter-api:${Versions.almondApi}")
+
+  object test extends ScalaTests, TestModule.Munit {
+    def mvnDeps = Seq(
+      mvn"org.scalameta::munit::${Versions.munit}",
+      mvn"sh.almond::interpreter-api:${Versions.almondApi}"
+    )
+  }
+}
+
+/** Scala.js frontend. ESModule because the anywidget AFM contract requires one. */
+object front extends WedgieJSModule {
+  def moduleDeps       = Seq(core.js)
+  def mvnDeps          = Seq(mvn"com.raquo::laminar::${Versions.laminar}")
+  def moduleKind       = ModuleKind.ESModule
+  def moduleSplitStyle = ModuleSplitStyle.FewestModules
+}

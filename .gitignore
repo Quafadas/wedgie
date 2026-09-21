@@ -2,5 +2,22 @@
 *.tasty
 *.log
 
+# mill
+out/
+.mill-jvm-opts
+/mill.*
+
+# ide / build server
+.bsp/
+.bloop/
+.metals/
+.vscode/
+.idea/
+
+# jupyter
+.ipynb_checkpoints/
+notebook-shadow/
+
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+notebook-shadow/
