@@ -8,9 +8,29 @@ Almond declares itself an anywidget model and ships the frontend as a synced
 string. anywidget's own frontend arrives from a CDN, so nothing needs installing
 in the notebook environment, including the `anywidget` Python package.
 
-**Status: Phase 0/1.** The kernel-side library works and is tested. The frontend
-is a smoke test, not yet a bridge. Five environment questions are still open — see
-`notebooks/probes.ipynb`.
+**Status: verified end to end, minus the sync bridge.**
+
+Confirmed on a live kernel (Almond 0.14.x, VS Code, WSL2):
+
+| | |
+| --- | --- |
+| `reference.ipynb` | Widget renders, clicks reach Scala, kernel pushes state back. |
+| `counter.ipynb` | `Widget[S]` works against a real `CommHandler`; `commHandler` and `publish` resolve as the `using` parameters from a cell. |
+| `own-bundle.ipynb` | **A 325 KB Scala.js + Laminar bundle inlined into `_esm` renders in the webview.** |
+
+So the premise holds: Scala we wrote runs in the notebook, and the AFM factory
+form emitted by `@JSExportTopLevel("default")` is accepted by the real host.
+
+What this settles:
+
+- `EsmSource.Inline` works with a real bundle. **Probe 3 is no longer on the
+  critical path** — bundle delivery is now a question of `.ipynb` size and
+  notebook ergonomics, not of feasibility.
+- `RemoteImport` and `CommDelivered` are optimisations, not unblocks. Probes 4
+  and 5 matter only if you want many widgets per notebook.
+
+What remains: `Entry.render` ignores `model` on purpose, so **nothing above tests
+state sync between Laminar and the traitlets**. That bridge is the next code.
 
 ## Layout
 
