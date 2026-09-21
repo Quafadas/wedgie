@@ -26,7 +26,12 @@ object EsmSource:
     * Simple, works everywhere, needs no network at all — and costs its full size
     * in every `comm_open` and in the saved notebook. Fine for the handwritten
     * JavaScript of a reference widget; untenable for a Scala.js bundle at more
-    * than one widget per notebook. */
+    * than one widget per notebook.
+    *
+    * The source must carry its own default export: AFM requires one, and a
+    * named `export { render }` alone is not enough. A linked `front` bundle
+    * satisfies this on its own — `@JSExportTopLevel("default")` emits the
+    * factory form — so a Scala.js bundle needs no wrapper here. */
   final case class Inline(source: String) extends EsmSource:
     def esm: String = source
 

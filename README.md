@@ -37,6 +37,7 @@ is a smoke test, not yet a bridge. Five environment questions are still open —
 | `reference.ipynb` | The minimal round trip, depending on nothing but `ujson`. **Run this first** when anything in the environment moves. |
 | `probes.ipynb` | The five open Phase 0 questions, each as a runnable cell. |
 | `counter.ipynb` | The same counter rebuilt on `Widget[S]`. |
+| `own-bundle.ipynb` | Does **our own** Scala.js bundle render in the webview? The first real test of the premise. |
 
 ## Design notes
 
@@ -90,6 +91,12 @@ pass.
 
 Scala.js with `ModuleSplitStyle.FewestModules` emits a **single** file, so no
 bundler step is needed for the inline strategies.
+
+The linked `front` bundle is a **valid AFM on its own**: AFM requires a default
+export, and `@JSExportTopLevel("default")` emits the factory form (a function
+returning `{ render }`). Verified by importing the release bundle under node. So
+`EsmSource.Inline(<the bundle>)` needs no wrapper, and `RemoteImport` only needs
+one because it is re-exporting across a module boundary.
 
 ## Deliberately not implemented
 

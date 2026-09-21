@@ -20,6 +20,13 @@ import scala.scalajs.js.annotation.JSExportTopLevel
   */
 object Entry:
 
+  /** AFM factory form: the default export MAY be a function returning the
+    * interface. Scala.js exports defs readily, so this makes the linked bundle a
+    * valid anywidget module on its own, with no `_esm` wrapper at all. */
+  @JSExportTopLevel("default")
+  def afm(): js.Dynamic =
+    js.Dynamic.literal(render = (ctx: js.Dynamic) => render(ctx))
+
   @JSExportTopLevel("render")
   def render(ctx: js.Dynamic): Unit =
     val el    = ctx.el.asInstanceOf[dom.Element]

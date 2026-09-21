@@ -2,6 +2,9 @@ package wedgie
 
 class EsmSourceTests extends munit.FunSuite:
 
+  // AFM requires a default export; a named `export { render }` alone will not
+  // load. Inline therefore assumes its source already provides one, which a
+  // linked `front` bundle does via @JSExportTopLevel("default").
   test("Inline carries the module verbatim and serves nothing"):
     val src = "export default { render() {} };"
     assertEquals(EsmSource.Inline(src).esm, src)
