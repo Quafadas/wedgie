@@ -110,5 +110,6 @@ one because it is re-exporting across a module boundary.
 ## Versions
 
 Scala 3.8.4 · Scala.js 1.22.0 (3.8.4 emits `linkTimeIf`, needs ≥ 1.20) ·
-Mill 1.1.9 · Almond `interpreter-api` 0.14.1 (`provided`) · anywidget `~0.11.*` ·
+Mill 1.1.9 · Almond `interpreter-api` 0.14.5, minimum 0.14.2 (`provided`) ·
+anywidget `~0.11.*` ·
 widget protocol `2.0.0`.

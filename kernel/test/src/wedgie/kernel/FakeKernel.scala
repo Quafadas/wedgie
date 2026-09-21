@@ -54,3 +54,6 @@ final class FakeOutput(val allowed: Boolean = true) extends OutputHandler:
   def updateDisplay(displayData: DisplayData): Unit = ()
   def canOutput(): Boolean                          = allowed
   def messageIdOpt: Option[String]                  = None
+  // Added to OutputHandler in 0.14.x; Jupyter "payloads" (set_next_input and
+  // friends) are nothing to do with widgets.
+  def addPayload(payload: String): Unit             = ()

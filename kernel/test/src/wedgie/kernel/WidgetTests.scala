@@ -1,6 +1,6 @@
 package wedgie.kernel
 
-import almond.interpreter.api.{CommHandler, OutputHandler}
+import almond.interpreter.api.{CommHandler, DisplayData, OutputHandler}
 import upickle.default.ReadWriter
 import wedgie.{EsmSource, Protocol, StateSync}
 
@@ -34,10 +34,14 @@ class WidgetTests extends munit.FunSuite:
     assertEquals(data("state")("_model_name").str, "AnyModel")
     assertEquals(data("state")("count").num.toInt, 0)
 
-  test("the displayed view joins to the comm by id"):
+  test("the displayed view joins to the comm by id, declared as JSON"):
     val (_, out, w) = fixture()
-    val payload = ujson.read(out.displayed.head.data(Protocol.ViewMimeType))
-    assertEquals(payload("model_id").str, w.modelId)
+    // Value.String would be serialised as a quoted string; the widget manager
+    // needs an object, so the distinction is load-bearing.
+    val raw = out.displayed.head.detailedData(Protocol.ViewMimeType) match
+      case DisplayData.Value.Json(s) => s
+      case other                     => fail(s"expected Value.Json, got $other")
+    assertEquals(ujson.read(raw)("model_id").str, w.modelId)
 
   test("state that cannot be a flat object is rejected before a comm exists"):
     val comms = FakeComms()

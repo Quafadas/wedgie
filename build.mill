@@ -9,7 +9,7 @@ object Versions {
   val upickle   = "4.3.0"
   val laminar   = "17.2.1"
   val munit     = "1.2.0"
-  val almondApi = "0.14.1"
+  val almondApi = "0.14.5" // >= 0.14.2 for DisplayData.addStringifiedJson
 }
 
 trait WedgieModule extends ScalaModule {

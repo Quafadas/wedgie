@@ -173,5 +173,11 @@ object Widget:
       ujson.write(data).getBytes(UTF_8),
       ujson.write(Payload.openMetadata).getBytes(UTF_8)
     )
-    out.display(DisplayData(Map(Protocol.ViewMimeType -> ujson.write(Payload.view(modelId)))))
+    // addStringifiedJson, not add: Almond distinguishes a real string (serialised
+    // as a quoted JSON string) from stringified JSON (used as-is). The widget
+    // manager needs an object here, so declaring the difference removes any
+    // reliance on downstream leniency. Needs interpreter-api >= 0.14.2.
+    out.display(
+      DisplayData().addStringifiedJson(Protocol.ViewMimeType, ujson.write(Payload.view(modelId)))
+    )
     widget
