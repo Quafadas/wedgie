@@ -69,8 +69,19 @@ object Bridge:
       state = Some(v)
       // Per-key subscriptions rather than a bare "change": `change:<key>` is what
       // the AFM examples use, so it is the safer contract to rely on.
-      keys.foreach: k =>
-        model.on(s"change:$k", (() => v.set(readModel(model))): js.Function0[Unit])
+      val bound = keys.map: k =>
+        val handler: js.Function0[Unit] = () => v.set(readModel(model))
+        model.on(s"change:$k", handler)
+        (k, handler)
+
+      // AFM hands `initialize` an AbortSignal precisely so these can be undone.
+      // Without it, re-running a cell stacks a fresh set of listeners on the same
+      // model and nothing ever drops the old ones.
+      val signal = ctx.signal
+      if !js.isUndefined(signal) && signal != null then
+        val onAbort: js.Function0[Unit] = () =>
+          bound.foreach((k, handler) => model.off(s"change:$k", handler))
+        signal.addEventListener("abort", onAbort)
 
     /** Runs once per view. May run more than once per instance. */
     def render(ctx: js.Dynamic): js.Function0[Unit] =

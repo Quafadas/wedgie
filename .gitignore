@@ -21,3 +21,6 @@ notebook-shadow/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 notebook-shadow/
+
+# node, for the jsdom-based AFM checks only
+node_modules/

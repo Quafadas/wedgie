@@ -93,6 +93,24 @@ object example extends Module {
     def moduleDeps       = Seq(front) // and Laminar + core.js transitively
     def moduleKind       = ModuleKind.ESModule
     def moduleSplitStyle = ModuleSplitStyle.FewestModules
+
+    /** fullLinkJS, then esbuild.
+      *
+      * Not an optimisation. `_esm` is synced model state, so the bundle travels
+      * inside `comm_open`, and a 1.4 MB one does not arrive — the widget simply
+      * never renders, silently. A minified 549 KB one does. `ModuleKind.ESModule` forfeits
+      * Closure and `scalaJSMinify` does not recover it, so an external minifier
+      * is the difference between working and not.
+      *
+      * Needs `npx` on PATH. Nothing else in the build does.
+      */
+    def bundle = Task {
+      val linked = fullLinkJS().dest.path / "main.js"
+      val out    = Task.dest / "wedgie.js"
+      os.proc("npx", "--yes", "esbuild", linked, "--minify", "--format=esm", s"--outfile=$out")
+        .call(cwd = Task.dest)
+      PathRef(out)
+    }
   }
 }
 

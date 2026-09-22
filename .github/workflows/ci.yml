@@ -28,6 +28,10 @@ jobs:
         with:
           node-version: '22'
 
+      # jsdom, so the AFM check can actually call render.
+      - name: Install check dependencies
+        run: npm install
+
       - uses: coursier/cache-action@v8
 
       - name: Cache mill
@@ -49,14 +53,16 @@ jobs:
       - name: Link smoke bundle
         run: ./mill smoke.fullLinkJS
 
+      # `bundle`, not `fullLinkJS`: the unminified output is too large to survive
+      # comm_open, and fails by rendering nothing at all.
       - name: Link example bundle
-        run: ./mill example.js.fullLinkJS
+        run: ./mill example.js.bundle
 
       - name: Check anywidget module contract
         run: |
           node scripts/afm-check.mjs \
             out/smoke/fullLinkJS.dest/main.js \
-            out/example/js/fullLinkJS.dest/main.js
+            out/example/js/bundle.dest/wedgie.js
 
       - name: Check notebooks
         run: python3 scripts/check-notebooks.py
@@ -78,7 +84,7 @@ jobs:
             echo
             echo "| bundle | raw | gzip |"
             echo "| --- | ---: | ---: |"
-            for f in out/smoke/fullLinkJS.dest/main.js out/example/js/fullLinkJS.dest/main.js; do
+            for f in out/smoke/fullLinkJS.dest/main.js out/example/js/bundle.dest/wedgie.js; do
               [ -f "$f" ] || continue
               raw=$(stat -c%s "$f")
               gz=$(gzip -c "$f" | wc -c)

@@ -22,7 +22,7 @@ Verified on a live kernel (Almond 0.14.x, VS Code, WSL2):
 | `reference.ipynb` | ✅ Widget renders, clicks reach Scala, kernel pushes state back. |
 | `counter.ipynb` | ✅ `Widget[S]` works against a real `CommHandler`. |
 | `own-bundle.ipynb` | ✅ A Scala.js + Laminar bundle inlined into `_esm` renders in the webview. |
-| `sync.ipynb` | ⏳ Written, not yet run on a kernel. |
+| `sync.ipynb` | ✅ Sync works in both directions over a cross-compiled type — **with the minified bundle**. |
 
 The bridge is verified headlessly by `scripts/afm-check.mjs`, which drives it
 against a fake anywidget model under node.
@@ -41,8 +41,9 @@ against a fake anywidget model under node.
 ./mill __.compile
 ./mill __.test
 ./mill smoke.fullLinkJS          # model-free bundle
-./mill example.js.fullLinkJS     # the real one
-node scripts/afm-check.mjs out/example/js/fullLinkJS.dest/main.js
+./mill example.js.bundle         # the real one: fullLinkJS + esbuild
+npm install                      # jsdom, for the render checks
+node scripts/afm-check.mjs out/example/js/bundle.dest/wedgie.js
 python3 scripts/check-notebooks.py
 
 ./mill core.jvm.publishLocal
@@ -116,14 +117,16 @@ serialised into the `.ipynb`.
 
 The jump is upickle's derivation machinery, and the reason it is not smaller is
 that **`ModuleKind.ESModule` forfeits Closure** — which is exactly the optimiser
-that shrinks that code. `scalaJSMinify` is on and does not recover it. So the
-honest cost of the shared-codec design is about 1 MB of bundle, or 220 KB
-compressed, unless an external minifier is added to the build:
+that shrinks that code. `scalaJSMinify` is on and does not recover it.
 
-```
-npx esbuild out/example/js/fullLinkJS.dest/main.js --minify --format=esm \
-  --outfile=out/example.min.js
-```
+**Minifying is not optional.** The 1414 KB bundle does not render: `comm_open`
+carries `_esm`, and a bundle that size does not survive the trip. Nothing is
+reported — the cells run clean, the console is silent, and no widget appears. The
+549 KB one works. The real ceiling is somewhere between; `scripts/afm-check.mjs`
+guards at 800 KB.
+
+Hence `./mill example.js.bundle`, which runs `fullLinkJS` through esbuild. It is
+the only part of the build that needs `npx` on PATH.
 
 | Strategy | `_esm` size | In the `.ipynb`? | Gated on |
 | --- | --- | --- | --- |
@@ -141,10 +144,11 @@ fetch it once. It is unverified — do not ship it before probes 4 and 5 pass.
 `.github/workflows/ci.yml` compiles, tests, links both bundles, and then runs two
 checks that exist because of bugs actually hit here:
 
-- `scripts/afm-check.mjs` — loads each bundle under node and asserts the AFM
-  contract, that `initialize` does not write to the model, and that a kernel-driven
-  change is not echoed back. Catches failures a notebook reports only as "nothing
-  rendered".
+- `scripts/afm-check.mjs` — loads each bundle under node, mounts it with jsdom,
+  and asserts the AFM contract: that `initialize` and `render` do not write to the
+  model, that a kernel-driven change reaches the view without being echoed back,
+  that `abort` removes the model listeners, and that the bundle is small enough to
+  survive `comm_open`. Every one of those corresponds to a bug hit here.
 - `scripts/check-notebooks.py` — rejects a top-level `val _ = …`, which Almond
   cannot compile because it emits the binding's name backquoted.
 

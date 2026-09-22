@@ -25,14 +25,18 @@ object Entry:
     * valid anywidget module on its own, with no `_esm` wrapper at all. */
   @JSExportTopLevel("default")
   def afm(): js.Dynamic =
-    js.Dynamic.literal(render = (ctx: js.Dynamic) => render(ctx))
+    js.Dynamic.literal(
+      render = ((ctx: js.Dynamic) => render(ctx)): js.Function1[js.Dynamic, js.Function0[Unit]]
+    )
 
+  /** Returns a cleanup function: AFM allows one, and a view that is unmounted
+    * without tearing down its Laminar root leaks the subscription. */
   @JSExportTopLevel("render")
-  def render(ctx: js.Dynamic): Unit =
+  def render(ctx: js.Dynamic): js.Function0[Unit] =
     val el    = ctx.el.asInstanceOf[dom.Element]
     val ticks = Var(0)
 
-    val _ = L.render(
+    val root = L.render(
       el,
       div(
         p("wedgie: Laminar is mounted."),
@@ -48,3 +52,5 @@ object Entry:
         )
       )
     )
+
+    () => root.unmount()

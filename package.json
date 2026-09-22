@@ -1,0 +1,9 @@
+{
+  "name": "wedgie-checks",
+  "private": true,
+  "type": "module",
+  "description": "Headless checks for the anywidget front-end module. Not shipped.",
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

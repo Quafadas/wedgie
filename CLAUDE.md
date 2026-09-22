@@ -48,9 +48,11 @@ bootstraps 404.
   CommHandler, OutputHandler)` cannot be called as `(using comms, out)`. Bind
   `given`s instead.
 - **Scala 3.8.4 emits `linkTimeIf`** → Scala.js must be ≥ 1.20.
-- **`ModuleKind.ESModule` forfeits Closure.** `scalaJSMinify` is on and does not
-  recover it; upickle's derivation is ~1 MB unminified. `esbuild --minify` halves
-  it. Measured numbers in `README.md`.
+- **Minify or the widget silently does not render.** `ModuleKind.ESModule`
+  forfeits Closure; `scalaJSMinify` does not recover it. `_esm` rides inside
+  `comm_open`, and the 1414 KB unminified bundle never arrives — cells run clean,
+  console silent, nothing rendered. 549 KB works. Use `./mill example.js.bundle`
+  (fullLinkJS + esbuild), never raw `fullLinkJS`, for anything you inline.
 - **`DisplayData(Map(...))` is deprecated** since Almond 0.14.2 and produces
   `Value.String`; the widget view payload needs `addStringifiedJson`.
 
@@ -72,8 +74,10 @@ catches most of this class headlessly — prefer it to guessing.
 
 ## Still open
 
-- `sync.ipynb` on a live kernel.
-- Bundle delivery: `Inline` is verified; `RemoteImport`/`CommDelivered` are size
-  optimisations gated on `probes.ipynb` (3, and 4+5 respectively). Not blockers.
+- Probes 1 and 2 (handler output routing, handler exceptions) have never been run.
+  `Widget`'s error posture is provisional on them.
+- Bundle delivery: `Inline` works *if minified*. `CommDelivered` would take the
+  bundle out of the `.ipynb` and out of `comm_open` entirely — gated on probes 4
+  and 5, and now more attractive than it looked.
 - Cross-compiled `S` means changing a widget's state type is a rebuild +
   `publishLocal` + kernel restart, not a cell edit. Unresolved ergonomics.
