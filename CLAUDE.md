@@ -74,6 +74,8 @@ catches most of this class headlessly — prefer it to guessing.
 
 ## Still open
 
+See `NEXT.md` for the worked-through task list. In brief:
+
 - Probes 1 and 2 (handler output routing, handler exceptions) have never been run.
   `Widget`'s error posture is provisional on them.
 - Bundle delivery: `Inline` works *if minified*. `CommDelivered` would take the

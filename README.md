@@ -106,38 +106,75 @@ It also gives each widget instance its own closure, which is where the `Var` liv
 
 ## Bundle size
 
-`_esm` is ordinary synced state, so it travels in every `comm_open` and is
-serialised into the `.ipynb`.
+This is the sharpest constraint on the project, and it fails in the worst possible
+way. `_esm` is ordinary synced model state, so the bundle travels **inside
+`comm_open`**. Past some size it does not arrive, and nothing reports it: the
+cells run clean, the webview console is silent, and no widget appears.
+
+Observed: **1414 KB does not render. 549 KB does.** The real ceiling is somewhere
+between and has not been bisected. `scripts/afm-check.mjs` guards at 800 KB.
+
+### Where the bytes go
+
+All figures esbuild-minified, which is the honest comparison:
 
 | Bundle | Raw | gzip |
 | --- | ---: | ---: |
-| `smoke` — Laminar only | 325 KB | 52 KB |
-| `example` — plus the cross-compiled codec | 1414 KB | 226 KB |
-| `example` through `esbuild --minify` | 549 KB | 149 KB |
+| `smoke` — Laminar + the Scala.js runtime | 126 KB | 34 KB |
+| `example` — the above plus upickle | **549 KB** | 146 KB |
 
-The jump is upickle's derivation machinery, and the reason it is not smaller is
-that **`ModuleKind.ESModule` forfeits Closure** — which is exactly the optimiser
-that shrinks that code. `scalaJSMinify` is on and does not recover it.
+**upickle is 77% of the bundle** — about 423 KB to serialise three fields. The
+linked output contains `upack` (MessagePack, 227 identifiers) and a `java.nio`
+ByteBuffer emulation (331 identifiers), neither of which this project uses.
+They survive dead-code elimination because upickle's `ReadWriter` machinery
+references them.
 
-**Minifying is not optional.** The 1414 KB bundle does not render: `comm_open`
-carries `_esm`, and a bundle that size does not survive the trip. Nothing is
-reported — the cells run clean, the console is silent, and no widget appears. The
-549 KB one works. The real ceiling is somewhere between; `scripts/afm-check.mjs`
-guards at 800 KB.
+Scala.js itself is not the problem here: Laminar and the whole runtime come to
+126 KB, which is unremarkable for a reactive UI framework.
 
-Hence `./mill example.js.bundle`, which runs `fullLinkJS` through esbuild. It is
-the only part of the build that needs `npx` on PATH.
+### Two compounding causes
 
-| Strategy | `_esm` size | In the `.ipynb`? | Gated on |
+1. **`ModuleKind.ESModule` forfeits Closure.** The AFM contract requires an ES
+   module, and the Scala.js Closure integration does not support that output.
+   `scalaJSMinify` is on and recovers far less — hence `./mill example.js.bundle`,
+   which pipes `fullLinkJS` through esbuild (1414 → 549 KB). This is the only part
+   of the build that needs `npx` on PATH.
+2. **The browser is parsing JSON text it never needed.** Traitlets arrive from
+   `model.get(k)` as *JavaScript values*. `Bridge` currently converts them
+   `js.Any → JSON.stringify → ujson → upickle → S`, which drags in a complete JSON
+   parser, a MessagePack codec and `java.nio` — to read values that were already
+   structured data.
+
+### Ways out, in order of leverage
+
+| Approach | Effect | Cost |
+| --- | --- | --- |
+| **Drop upickle on the JS side** — a `Mirror`-derived `js.Any ↔ S` mapper | ~549 → ~150 KB | ~150 lines; the shared *type* stays shared, only the codec differs per platform |
+| `EsmSource.CommDelivered` | Bundle leaves `comm_open` and the `.ipynb` entirely | Gated on probes 4 + 5 |
+| `EsmSource.RemoteImport` | Same, plus a reachable host | Gated on probe 3 |
+| Bisect the actual ceiling | Makes the 800 KB guard principled rather than guessed | An afternoon of notebook runs |
+
+The first is the real fix and is architecturally *more* correct, not a compromise:
+nothing in the browser should be parsing JSON text when the host already handed it
+JS values. It also keeps the argument for doing this in Scala — the case class is
+still compiled once for both ends; only the derivation differs.
+
+Tempting but probably broken: linking `ModuleKind.NoModule` to regain Closure and
+appending an `export` line. Scala.js's no-module output opens with
+`$fileLevelThis = this`, and `this` is `undefined` at the top level of an ES
+module. Test before betting on it.
+
+### Delivery strategies
+
+| Strategy | `_esm` size | In the `.ipynb`? | Status |
 | --- | --- | --- | --- |
-| `Inline` | full bundle | yes | nothing — **verified working** |
-| `RemoteImport` | ~120 B | no | probe 3 |
-| `CommDelivered` | ~300 B | no | probes 4 + 5 |
+| `Inline` | full bundle | yes | **works, if minified** |
+| `RemoteImport` | ~120 B | no | needs probe 3 |
+| `CommDelivered` | ~300 B | no | needs probes 4 + 5 |
 
-`Inline` is proven, so the other two are size optimisations rather than unblocks.
 `CommDelivered` sends the bundle as a transient `custom` message, needing neither
-a CDN nor a reachable internal host; a `globalThis` promise cache means N widgets
-fetch it once. It is unverified — do not ship it before probes 4 and 5 pass.
+a CDN nor a reachable host, and a `globalThis` promise cache means N widgets fetch
+it once. Unverified — do not ship it before probes 4 and 5 pass.
 
 ## CI
 
